@@ -1,0 +1,167 @@
+<?php
+require '../../main.inc.php';
+require_once DOL_DOCUMENT_ROOT.'/compta/facture/class/facture.class.php';
+require_once DOL_DOCUMENT_ROOT.'/societe/class/societe.class.php';
+
+$id = GETPOST('id', 'int');
+if (!$id) die('Factuur-ID ontbreekt');
+
+$invoice = new Facture($db);
+$invoice->fetch($id);
+$invoice->fetch_thirdparty();
+
+$societe = $invoice->thirdparty;
+
+header('Content-Type: application/xml');
+header('Content-Disposition: attachment; filename="peppol_invoice_' . $invoice->ref . '.xml"');
+
+$doc = new DOMDocument('1.0', 'UTF-8');
+$doc->formatOutput = true;
+
+function el($doc, $parent, $name, $value = '', $ns = 'cbc') {
+    $nsmap = [
+        'cbc' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
+        'cac' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
+    ];
+    $el = $doc->createElementNS($nsmap[$ns], "$ns:$name", htmlspecialchars($value));
+    $parent->appendChild($el);
+    return $el;
+}
+
+$Invoice = $doc->createElementNS('urn:oasis:names:specification:ubl:schema:xsd:Invoice-2', 'Invoice');
+$Invoice->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
+$Invoice->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:cac', 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2');
+$doc->appendChild($Invoice);
+
+// Header
+el($doc, $Invoice, 'UBLVersionID', '2.1');
+el($doc, $Invoice, 'CustomizationID', 'urn:cen.eu:en16931:2017');
+el($doc, $Invoice, 'ProfileID', 'urn:fdc:peppol.eu:2017');
+el($doc, $Invoice, 'ID', $invoice->ref);
+el($doc, $Invoice, 'IssueDate', dol_print_date($invoice->date, '%Y-%m-%d'));
+el($doc, $Invoice, 'InvoiceTypeCode', '380');
+el($doc, $Invoice, 'Note', 'invoice note');
+el($doc, $Invoice, 'DocumentCurrencyCode', $invoice->multicurrency_code ?: 'EUR');
+el($doc, $Invoice, 'BuyerReference', 'BUYER_REF');
+
+$period = el($doc, $Invoice, 'InvoicePeriod', '', 'cac');
+el($doc, $period, 'StartDate', dol_print_date($invoice->date, '%Y-%m-%d'));
+
+$orderRef = el($doc, $Invoice, 'OrderReference', '', 'cac');
+el($doc, $orderRef, 'ID', '5009567');
+el($doc, $orderRef, 'SalesOrderID', 'tRST-tKhM');
+
+// Supplier
+$supplier = el($doc, $Invoice, 'AccountingSupplierParty', '', 'cac');
+$party = el($doc, $supplier, 'Party', '', 'cac');
+$name = el($doc, $party, 'PartyName', '', 'cac');
+el($doc, $name, 'Name', $conf->global->MAIN_INFO_SOCIETE_NOM);
+$addr = el($doc, $party, 'PostalAddress', '', 'cac');
+el($doc, $addr, 'StreetName', $conf->global->MAIN_INFO_SOCIETE_ADDRESS);
+el($doc, $addr, 'AdditionalStreetName', 'De Burren');
+el($doc, $addr, 'CityName', $conf->global->MAIN_INFO_SOCIETE_TOWN);
+el($doc, $addr, 'PostalZone', $conf->global->MAIN_INFO_SOCIETE_ZIP);
+$country = el($doc, $addr, 'Country', '', 'cac');
+el($doc, $country, 'IdentificationCode', strtoupper(substr($conf->global->MAIN_INFO_SOCIETE_COUNTRY, 0, 2)) ?: 'BE');
+$tax = el($doc, $party, 'PartyTaxScheme', '', 'cac');
+el($doc, $tax, 'CompanyID', $conf->global->MAIN_INFO_TVAINTRA ?: 'BE0123456789');
+$taxScheme = el($doc, $tax, 'TaxScheme', '', 'cac');
+el($doc, $taxScheme, 'ID', 'VAT');
+$legal = el($doc, $party, 'PartyLegalEntity', '', 'cac');
+el($doc, $legal, 'RegistrationName', $conf->global->MAIN_INFO_SOCIETE_NOM);
+el($doc, $legal, 'CompanyID', $conf->global->MAIN_INFO_TVAINTRA ?: 'BE0123456789');
+
+// Customer
+$customer = el($doc, $Invoice, 'AccountingCustomerParty', '', 'cac');
+$party = el($doc, $customer, 'Party', '', 'cac');
+$name = el($doc, $party, 'PartyName', '', 'cac');
+el($doc, $name, 'Name', $societe->name);
+$addr = el($doc, $party, 'PostalAddress', '', 'cac');
+el($doc, $addr, 'StreetName', $societe->address);
+el($doc, $addr, 'AdditionalStreetName', 'De Burren');
+el($doc, $addr, 'CityName', $societe->town);
+el($doc, $addr, 'PostalZone', $societe->zip);
+$country = el($doc, $addr, 'Country', '', 'cac');
+el($doc, $country, 'IdentificationCode', strtoupper(trim(substr(..., 0, 2))) ?: 'BE');
+$tax = el($doc, $party, 'PartyTaxScheme', '', 'cac');
+el($doc, $tax, 'CompanyID', $societe->idprof1 ?: 'BE0987654321');
+$taxScheme = el($doc, $tax, 'TaxScheme', '', 'cac');
+el($doc, $taxScheme, 'ID', 'VAT');
+$legal = el($doc, $party, 'PartyLegalEntity', '', 'cac');
+el($doc, $legal, 'RegistrationName', $societe->name);
+el($doc, $legal, 'CompanyID', 'Client Company Registration');
+
+// Delivery
+$delivery = el($doc, $Invoice, 'Delivery', '', 'cac');
+el($doc, $delivery, 'ActualDeliveryDate', dol_print_date($invoice->date, '%Y-%m-%d'));
+
+$location = el($doc, $delivery, 'DeliveryLocation', '', 'cac');
+$address = el($doc, $location, 'Address', '', 'cac');
+
+// De meeste validators vereisen ook minstens een basisadres, dus:
+el($doc, $address, 'StreetName', $societe->address ?: 'Straat onbekend');
+el($doc, $address, 'CityName', $societe->town ?: 'Onbekend');
+el($doc, $address, 'PostalZone', $societe->zip ?: '0000');
+
+$country = el($doc, $address, 'Country', '', 'cac');
+el($doc, $country, 'IdentificationCode', strtoupper(trim(substr(..., 0, 2))) ?: 'BE');
+
+
+// Payment
+$payment = el($doc, $Invoice, 'PaymentMeans', '', 'cac');
+el($doc, $payment, 'PaymentMeansCode', '31');
+el($doc, $payment, 'PaymentID', 'our invoice ' . $invoice->ref);
+$account = el($doc, $payment, 'PayeeFinancialAccount', '', 'cac');
+el($doc, $account, 'ID', 'NL00RABO0000000000');
+el($doc, $account, 'Name', 'Customer Account Holder');
+$branch = el($doc, $account, 'FinancialInstitutionBranch', '', 'cac');
+el($doc, $branch, 'ID', 'RABONL2U');
+
+$terms = el($doc, $Invoice, 'PaymentTerms', '', 'cac');
+el($doc, $terms, 'Note', '30 days net');
+
+// TaxTotal
+$taxTotal = el($doc, $Invoice, 'TaxTotal', '', 'cac');
+el($doc, $taxTotal, 'TaxAmount', number_format($invoice->total_tva, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+$sub = el($doc, $taxTotal, 'TaxSubtotal', '', 'cac');
+el($doc, $sub, 'TaxableAmount', number_format($invoice->total_ht, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+el($doc, $sub, 'TaxAmount', number_format($invoice->total_tva, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+$cat = el($doc, $sub, 'TaxCategory', '', 'cac');
+el($doc, $cat, 'ID', 'S');
+el($doc, $cat, 'Percent', '21.00');
+$scheme = el($doc, $cat, 'TaxScheme', '', 'cac');
+el($doc, $scheme, 'ID', 'VAT');
+
+// Totals
+$legal = el($doc, $Invoice, 'LegalMonetaryTotal', '', 'cac');
+el($doc, $legal, 'LineExtensionAmount', number_format($invoice->total_ht, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+el($doc, $legal, 'TaxExclusiveAmount', number_format($invoice->total_ht, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+el($doc, $legal, 'TaxInclusiveAmount', number_format($invoice->total_ttc, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+el($doc, $legal, 'AllowanceTotalAmount', '0.00')->setAttribute('currencyID', 'EUR');
+el($doc, $legal, 'PayableAmount', number_format($invoice->total_ttc, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+
+// Lines
+foreach ($invoice->lines as $i => $line) {
+    $lineNode = el($doc, $Invoice, 'InvoiceLine', '', 'cac');
+    el($doc, $lineNode, 'ID', $i + 1);
+    el($doc, $lineNode, 'InvoicedQuantity', number_format($line->qty, 2, '.', ''), 'cbc')->setAttribute('unitCode', 'C62');
+    el($doc, $lineNode, 'LineExtensionAmount', number_format($line->total_ht, 2, '.', ''), 'cbc')->setAttribute('currencyID', 'EUR');
+
+    $period = el($doc, $lineNode, 'InvoicePeriod', '', 'cac');
+    el($doc, $period, 'StartDate', dol_print_date($invoice->date, '%Y-%m-%d'));
+
+    $item = el($doc, $lineNode, 'Item', '', 'cac');
+    el($doc, $item, 'Description', $line->desc);
+    el($doc, $item, 'Name', $line->desc ?: 'Productnaam onbekend');
+    $cat = el($doc, $item, 'ClassifiedTaxCategory', '', 'cac');
+    el($doc, $cat, 'ID', 'S');
+    el($doc, $cat, 'Percent', '21.00');
+    $scheme = el($doc, $cat, 'TaxScheme', '', 'cac');
+    el($doc, $scheme, 'ID', 'VAT');
+
+    $price = el($doc, $lineNode, 'Price', '', 'cac');
+    el($doc, $price, 'PriceAmount', number_format($line->subprice, 2, '.', ''))->setAttribute('currencyID', 'EUR');
+    el($doc, $price, 'BaseQuantity', number_format($line->qty, 2, '.', ''))->setAttribute('unitCode', 'C62');
+}
+
+echo $doc->saveXML();
