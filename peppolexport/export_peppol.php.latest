@@ -1,0 +1,89 @@
+<?php
+
+class PeppolExport {
+    private $db;
+
+    public function __construct($db) {
+        $this->db = $db;
+    }
+
+    public function sendToBillit($invoice_id) {
+        require_once DOL_DOCUMENT_ROOT . '/compta/facture/class/facture.class.php';
+        require_once DOL_DOCUMENT_ROOT . '/societe/class/societe.class.php';
+        require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
+        require_once DOL_DOCUMENT_ROOT . '/core/lib/json.lib.php';
+        require_once DOL_DOCUMENT_ROOT . '/core/lib/functions2.lib.php';
+        require_once DOL_DOCUMENT_ROOT . '/core/lib/date.lib.php';
+
+        $invoice = new Facture($this->db);
+        if ($invoice->fetch($invoice_id) <= 0) {
+            return ['success' => false, 'error' => 'Kan factuur niet ophalen.'];
+        }
+        $invoice->fetch_thirdparty();
+
+        $societe = $invoice->thirdparty;
+
+        $data = [
+            "OrderType" => "Invoice",
+            "OrderDirection" => "Income",
+            "OrderNumber" => $invoice->ref,
+            "OrderDate" => dol_print_date($invoice->date, '%Y-%m-%d'),
+            "ExpiryDate" => dol_print_date($invoice->date + (30 * 86400), '%Y-%m-%d'),
+            "Customer" => [
+                "Name" => $societe->name,
+                "VATNumber" => $societe->tva_intra ?: "",
+                "PartyType" => "Customer",
+                "Identifiers" => [],
+                "Addresses" => [
+                    [
+                        "AddressType" => "InvoiceAddress",
+                        "Name" => $societe->name,
+                        "Street" => $societe->address,
+                        "StreetNumber" => "",
+                        "City" => $societe->town,
+                        "Box" => "",
+                        "CountryCode" => $societe->country_code ?: "BE"
+                    ]
+                ]
+            ],
+            "OrderLines" => []
+        ];
+
+        foreach ($invoice->lines as $line) {
+            $data["OrderLines"][] = [
+                "Quantity" => (float) $line->qty,
+                "UnitPriceExcl" => (float) $line->subprice,
+                "Description" => $line->desc,
+                "VATPercentage" => 21.0
+            ];
+        }
+
+        $apiToken = '1898e60f-4ed7-4ec6-9bc9-d1b5f73ad8bb'; // Vervang met jouw echte API token
+        $partyId = '27273177';
+
+        $client = new \GuzzleHttp\Client();
+
+        try {
+            $response = $client->request('POST', 'https://api.billit.be/v1/orders', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $apiToken,
+                    'Content-Type' => 'application/json',
+                    'partyId' => $partyId
+                ],
+                'body' => json_encode($data)
+            ]);
+
+            return [
+                'success' => true,
+                'response' => json_decode($response->getBody()->getContents(), true)
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+}
+

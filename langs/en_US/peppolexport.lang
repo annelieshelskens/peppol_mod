@@ -1,0 +1,42 @@
+# Translation file
+
+#
+# Generic
+#
+
+# Module label 'ModulePEPPOLexportName'
+ModulePEPPOLexportName = PEPPOLexport
+# Module description 'ModulePEPPOLexportDesc'
+ModulePEPPOLexportDesc = PEPPOLexport description
+
+#
+# Admin page
+#
+PEPPOLexportSetup = PEPPOLexport setup
+Settings = Settings
+PEPPOLexportSetupPage = PEPPOLexport setup page
+NewSection=New section
+PEPPOLEXPORT_MYPARAM1 = My param 1
+PEPPOLEXPORT_MYPARAM1Tooltip = My param 1 tooltip
+PEPPOLEXPORT_MYPARAM2=My param 2
+PEPPOLEXPORT_MYPARAM2Tooltip=My param 2 tooltip
+
+
+#
+# About page
+#
+About = About
+PEPPOLexportAbout = About PEPPOLexport
+PEPPOLexportAboutPage = PEPPOLexport about page
+
+#
+# Sample page
+#
+PEPPOLexportArea = Home PEPPOLexport
+MyPageName = My page name
+
+#
+# Sample widget
+#
+MyWidget = My widget
+MyWidgetDescription = My widget description
