@@ -2,8 +2,8 @@
 class PeppolExport
 {
     private $db;
-    private $apiToken = '1898e60f-4ed7-4ec6-9bc9-d1b5f73ad8bb'; // Vervang dit door je eigen token
-    private $partyId = '27273177'; // Jouw party ID
+    private $apiToken = ''; // Vervang dit door je eigen token
+    private $partyId = ''; // Jouw party ID
     private $billitApiUrl = 'https://api.billit.be/v1/orders';
 
     public function __construct($db)
