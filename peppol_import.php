@@ -54,8 +54,8 @@ if (empty($peppol_id))
 
 // === 1) YOUR BILLIT CREDENTIALS ===
 // You can define these in Dolibarr’s global settings (e.g. via $conf->global), or hard‐code:
-$apiToken = 'e8924baa-8956-4b9d-b8d9-9271f84f1c70';
-$partyId = '655986';
+$apiToken = '';
+$partyId = '';
 
 if (empty($apiToken) || empty($partyId))
 {
