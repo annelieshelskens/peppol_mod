@@ -23,7 +23,7 @@ if (empty($fileId)) {
 }
 
 // 2) Read Billit “partyID” from Dolibarr global settings
-$partyId = '655986';
+$partyId = '';
 if (empty($partyId)) {
     header('HTTP/1.1 500 Internal Server Error');
     echo 'Billit partyID not configured.';
